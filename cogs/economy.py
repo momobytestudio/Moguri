@@ -3,6 +3,9 @@ import discord
 from discord.ext import commands
 from utils.database import db
 
+# Custom Currency Emoji
+CURRENCY_EMOJI = "<:Star_Currency:1572392950460055574>"
+
 def parse_amount(amount_str: str, current_balance: int) -> int:
     """Parse string inputs like 'all', 'half', '10k', '5.5m', '2b' into integer values."""
     amount_str = str(amount_str).strip().lower()
@@ -12,7 +15,6 @@ def parse_amount(amount_str: str, current_balance: int) -> int:
     if amount_str in ["half", "50%"]:
         return current_balance // 2
 
-    # Match numeric values with optional suffixes (k, m, b, t, qa, etc.)
     match = re.match(r"^(\d+(?:\.\d+)?)\s*([a-z]+)?$", amount_str)
     if not match:
         raise ValueError("Invalid amount format.")
@@ -58,8 +60,8 @@ class Economy(commands.Cog):
             title=f"{target_user.display_name}'s Balance",
             color=discord.Color.blue()
         )
-        embed.add_field(name="Wallet", value=f"**{wallet_str}**", inline=True)
-        embed.add_field(name="Bank", value=f"**{bank_str}**", inline=True)
+        embed.add_field(name="Wallet", value=f"{CURRENCY_EMOJI} **{wallet_str}**", inline=True)
+        embed.add_field(name="Bank", value=f"🏛️ **{bank_str}**", inline=True)
         embed.set_thumbnail(url=target_user.display_avatar.url)
 
         await ctx.send(embed=embed)
@@ -71,7 +73,7 @@ class Economy(commands.Cog):
 
         earned_str = db.format_number(earned)
         embed = discord.Embed(
-            description=f"You worked and earned **{earned_str}**!",
+            description=f"You worked and earned {CURRENCY_EMOJI} **{earned_str}**!",
             color=discord.Color.green()
         )
         await ctx.send(embed=embed)
@@ -96,7 +98,7 @@ class Economy(commands.Cog):
 
         dep_str = db.format_number(parsed_amount)
         embed = discord.Embed(
-            description=f"Deposited **{dep_str}** into your bank.",
+            description=f"Deposited {CURRENCY_EMOJI} **{dep_str}** into your bank.",
             color=discord.Color.blue()
         )
         await ctx.send(embed=embed)
@@ -121,7 +123,7 @@ class Economy(commands.Cog):
 
         with_str = db.format_number(parsed_amount)
         embed = discord.Embed(
-            description=f"Withdrew **{with_str}** from your bank.",
+            description=f"Withdrew {CURRENCY_EMOJI} **{with_str}** from your bank.",
             color=discord.Color.blue()
         )
         await ctx.send(embed=embed)
