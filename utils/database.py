@@ -39,4 +39,38 @@ class Database:
             {"$inc": {"bank": amount}}
         )
 
+    @staticmethod
+    def format_number(n: int) -> str:
+        """Convert large numbers into readable alphabetical abbreviations up to zillion."""
+        if n < 1000:
+            return str(n)
+
+        # Alphabetical number tiers (Short Scale)
+        suffixes = [
+            "", "K", "M", "B", "T", "Qa", "Qi", "Sx", "Sp", "Oc", "No", 
+            "Dc", "UDc", "DDc", "TDc", "QaDc", "QiDc", "SxDc", "SpDc", "ODc", "NDc", 
+            "Vg", "UVg", "DVg", "TVg", "QaVg", "QiVg", "SxVg", "SpVg", "OVg", "NVg",
+            "Tg", "UTg", "DTg", "TTg", "QaTg", "QiTg", "SxTg", "SpTg", "OTg", "NTg",
+            "Qag", "UQag", "DQag", "TQag", "QaQag", "QiQag", "SxQag", "SpQag", "OQag", "NQag",
+            "Qig", "UQig", "DQig", "TQig", "QaQig", "QiQig", "SxQig", "SpQig", "OQig", "NQig",
+            "Sxg", "USxg", "DSxg", "TSxg", "QaSxg", "QiSxg", "SxSxg", "SpSxg", "OSxg", "NSxg",
+            "Spg", "USpg", "DSpg", "TSpg", "QaSpg", "QiSpg", "SxSpg", "SpSpg", "OSpg", "NSpg",
+            "Ocg", "UOcg", "DOcg", "TOcg", "QaOcg", "QiOcg", "SxOcg", "SpOcg", "OOcg", "NOcg",
+            "Nog", "UNog", "DNog", "TNog", "QaNog", "QiNog", "SxNog", "SpNog", "ONog", "NNog",
+            "VgN", "UvN", "DvN", "TvN", "Qav", "Qiv", "Sxv", "Spv", "Ocv", "Nov",
+            "Zillion" # Scale cap
+        ]
+
+        import math
+        tier = int(math.floor(math.log10(abs(n)) / 3))
+        
+        if tier >= len(suffixes):
+            return "Zillion+"
+
+        suffix = suffixes[tier]
+        scale = math.pow(10, tier * 3)
+        scaled = n / scale
+
+        return f"{scaled:.2f}".rstrip("0").rstrip(".") + suffix
+
 db = Database()
