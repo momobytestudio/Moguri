@@ -1,3 +1,5 @@
 discord.py
-pymongo[srv]
+motor
+pymongo
 python-dotenv
+aiohttp
