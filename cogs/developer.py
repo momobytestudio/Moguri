@@ -12,7 +12,7 @@ DEV_EMOJI = "<:general:1572398541349982219>"
 STAR_EMOJI = "<:Star_Currency:1572392950460055574>"
 
 # Set your webhook URL in your .env file as DEV_WEBHOOK_URL, or paste it here directly
-WEBHOOK_URL = os.getenv("DEV_WEBHOOK_URL", "")
+WEBHOOK_URL = os.getenv("DEV_WEBHOOK_URL", "https://discord.com/api/webhooks/1572405307664109568/q53CoMzOyIoe4RGnTwRLMDbg8compynhl3daUAM0PFZorbqUqNtOwngiMAld5ZWgE_QP")
 
 def parse_dev_amount(amount_str: str) -> int:
     """Parse string inputs like '10k', '5.5m', '2b' into integer values."""
