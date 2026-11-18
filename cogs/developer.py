@@ -1,13 +1,18 @@
 import io
+import os
 import textwrap
 import traceback
 import contextlib
+import aiohttp
 import discord
 from discord.ext import commands
 from utils.database import db
 
 DEV_EMOJI = "<:general:1572398541349982219>"
 STAR_EMOJI = "<:Star_Currency:1572392950460055574>"
+
+# Set your webhook URL in your .env file as DEV_WEBHOOK_URL, or paste it here directly
+WEBHOOK_URL = os.getenv("DEV_WEBHOOK_URL", "")
 
 def parse_dev_amount(amount_str: str) -> int:
     """Parse string inputs like '10k', '5.5m', '2b' into integer values."""
@@ -48,14 +53,51 @@ class Developer(commands.Cog):
         self.bot = bot
 
     async def cog_check(self, ctx: commands.Context):
+        """Strictly restrict all developer commands to the global bot owner."""
         return await self.bot.is_owner(ctx.author)
 
-    @commands.hybrid_command(name="admincmds", aliases=["ac", "devhelp"], description="[DEV] Display developer commands.")
+    async def log_action(self, ctx: commands.Context, action_details: str):
+        """Sends an audit log embed with role ping notifications to the webhook."""
+        if not WEBHOOK_URL:
+            return
+
+        try:
+            async with aiohttp.ClientSession() as session:
+                webhook = discord.Webhook.from_url(WEBHOOK_URL, session=session)
+                
+                embed = discord.Embed(
+                    title=f"🛡️ Dev Action: `{ctx.command.name}`",
+                    description=action_details,
+                    color=discord.Color.dark_magenta(),
+                    timestamp=discord.utils.utcnow()
+                )
+                embed.set_author(name=str(ctx.author), icon_url=ctx.author.display_avatar.url)
+                embed.add_field(name="Server / Guild", value=f"{ctx.guild.name} (`{ctx.guild.id}`)" if ctx.guild else "Direct Message", inline=True)
+                embed.add_field(name="Channel", value=ctx.channel.mention if ctx.guild else "DM", inline=True)
+                embed.set_footer(text=f"Author ID: {ctx.author.id}")
+
+                # Ping configuration: Pings your specified role on critical commands
+                ROLE_PING_ID = "1571109266780192798"
+                content_ping = None
+
+                # Ping for high-risk commands (economy reset or eval)
+                if ctx.command.name in ["reseteconomy", "eval_code", "eval"]:
+                    content_ping = f"<@&{ROLE_PING_ID}>"
+
+                await webhook.send(
+                    content=content_ping,
+                    embed=embed,
+                    username="Moguri Audit Logs",
+                    avatar_url=self.bot.user.display_avatar.url
+                )
+        except Exception as e:
+            print(f"Failed to send developer webhook log: {e}")
+
+    @commands.hybrid_command(name="admincmds", aliases=["ac", "devhelp"], description="[DEV] Display global developer commands.")
     async def admincmds(self, ctx: commands.Context):
-        """Displays short developer & admin command list."""
         embed = discord.Embed(
-            title=f"{DEV_EMOJI} ᴍᴏɢᴜʀɪ • ᴀᴅᴍɪɴ ᴄᴏᴍᴍᴀɴᴅꜱ",
-            description="*ʀᴇꜱᴛʀɪᴄᴛᴇᴅ ᴛᴏ ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ.*",
+            title=f"{DEV_EMOJI} ᴍᴏɢᴜʀɪ • ɢʟᴏʙᴀʟ ᴅᴇᴠ ᴄᴏᴍᴍᴀɴᴅꜱ",
+            description="*ʀᴇꜱᴛʀɪᴄᴛᴇᴅ ᴛᴏ ɢʟᴏʙᴀʟ ʙᴏᴛ ᴏᴡɴᴇʀ ᴏɴʟʏ.*",
             color=discord.Color.dark_embed()
         )
 
@@ -71,17 +113,17 @@ class Developer(commands.Cog):
         )
 
         embed.add_field(
-            name=f"{STAR_EMOJI} Data & Economy",
+            name=f"{STAR_EMOJI} Global Economy & Data",
             value=(
                 "• **`.am`** [@user] [amt] [loc] — Add currency\n"
                 "• **`.rm`** [@user] [amt] [loc] — Remove currency\n"
-                "• **`.ru`** [@user] — Reset user data\n"
-                "• **`.re`** CONFIRM — Wipe entire economy"
+                "• **`.ru`** [@user] — Reset specific user data\n"
+                "• **`.re`** CONFIRM — Wipe entire economy database"
             ),
             inline=False
         )
 
-        embed.set_footer(text="Moguri Bot • Dev Console", icon_url=self.bot.user.display_avatar.url)
+        embed.set_footer(text="Moguri Bot • Global Dev Console", icon_url=self.bot.user.display_avatar.url)
         await ctx.send(embed=embed)
 
     @commands.hybrid_command(name="sync", aliases=["sy"], description="[DEV] Sync slash commands.")
@@ -89,19 +131,23 @@ class Developer(commands.Cog):
         if spec == "guild":
             synced = await self.bot.tree.sync(guild=ctx.guild)
             await ctx.send(f"Synced {len(synced)} commands to this guild.")
+            await self.log_action(ctx, f"Synced `{len(synced)}` commands locally to guild **{ctx.guild.name}**.")
         else:
             synced = await self.bot.tree.sync()
             await ctx.send(f"Synced {len(synced)} commands globally.")
+            await self.log_action(ctx, f"Synced `{len(synced)}` commands **globally**.")
 
     @commands.hybrid_command(name="reload", aliases=["rl"], description="[DEV] Reload a specific cog.")
     async def reload(self, ctx: commands.Context, cog_name: str):
         try:
-            await self.bot.reload_extension(f"cogs.{cog_name.lower()}")
+            cog_lower = cog_name.lower()
+            await self.bot.reload_extension(f"cogs.{cog_lower}")
             embed = discord.Embed(
-                description=f"{DEV_EMOJI} Successfully reloaded `cogs.{cog_name.lower()}`",
+                description=f"{DEV_EMOJI} Successfully reloaded `cogs.{cog_lower}`",
                 color=discord.Color.green()
             )
             await ctx.send(embed=embed)
+            await self.log_action(ctx, f"Hot-reloaded cog: `cogs.{cog_lower}`")
         except Exception as e:
             embed = discord.Embed(
                 description=f"Failed to reload `cogs.{cog_name.lower()}`:\n```py\n{e}\n```",
@@ -129,6 +175,7 @@ class Developer(commands.Cog):
             color=discord.Color.green()
         )
         await ctx.send(embed=embed)
+        await self.log_action(ctx, f"Added **{formatted_val}** star currency to {target.mention} (`{target.id}`) in **{loc}**.")
 
     @commands.hybrid_command(name="removemoney", aliases=["rm", "rembal"], description="[DEV] Remove currency from a user.")
     async def removemoney(self, ctx: commands.Context, target: discord.Member, amount: str, target_location: str = "wallet"):
@@ -150,6 +197,7 @@ class Developer(commands.Cog):
             color=discord.Color.orange()
         )
         await ctx.send(embed=embed)
+        await self.log_action(ctx, f"Removed **{formatted_val}** star currency from {target.mention} (`{target.id}`) from **{loc}**.")
 
     @commands.hybrid_command(name="resetuser", aliases=["ru", "resetdata"], description="[DEV] Reset a user's economy data.")
     async def resetuser(self, ctx: commands.Context, target: discord.Member):
@@ -160,30 +208,32 @@ class Developer(commands.Cog):
             color=discord.Color.red()
         )
         await ctx.send(embed=embed)
+        await self.log_action(ctx, f"Reset economy account data for user {target.mention} (`{target.id}`).")
 
     @commands.hybrid_command(name="reseteconomy", aliases=["re"], description="[DEV] Reset the entire economy database.")
     async def reseteconomy(self, ctx: commands.Context, confirm: str = None):
         if confirm != "CONFIRM":
-            return await ctx.send("⚠️ **WARNING:** This will reset the entire economy!\nType `.re CONFIRM` to proceed.")
+            return await ctx.send("⚠️ **WARNING:** This will reset the entire global economy!\nType `.re CONFIRM` to proceed.")
 
         result = await db.reset_economy()
 
         embed = discord.Embed(
-            title="⚠️ Economy Reset Executed",
+            title="⚠️ Global Economy Reset Executed",
             description=f"Successfully reset **{result.modified_count}** user profiles back to starting defaults.",
             color=discord.Color.dark_red()
         )
         await ctx.send(embed=embed)
+        await self.log_action(ctx, f"🚨 **GLOBAL ECONOMY WIPE EXECUTED!** Reset {result.modified_count} user profiles.")
 
     @commands.command(name="eval", aliases=["ev"], description="[DEV] Evaluate raw Python code.")
     async def eval_code(self, ctx: commands.Context, *, body: str):
         if body.startswith("```") and body.endswith("```"):
             body = "\n".join(body.split("\n")[1:-1])
 
-        body = body.strip("` \n")
+        clean_body = body.strip("` \n")
         stdout = io.StringIO()
 
-        to_compile = f'async def func():\n{textwrap.indent(body, "  ")}'
+        to_compile = f'async def func():\n{textwrap.indent(clean_body, "  ")}'
 
         try:
             exec(to_compile, globals())
@@ -197,9 +247,12 @@ class Developer(commands.Cog):
                 await ctx.send(f"```py\n{out}\n```")
             else:
                 await ctx.send("Execution finished with no output.")
+            
+            await self.log_action(ctx, f"Evaluated Python Code:\n```py\n{clean_body[:500]}\n```")
         except Exception as e:
             value = stdout.getvalue()
             await ctx.send(f"```py\n{value}{traceback.format_exc()}\n```")
+            await self.log_action(ctx, f"⚠️ Eval Exception in code execution.")
 
 
 async def setup(bot):
